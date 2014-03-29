@@ -122,8 +122,8 @@ genStmt (CaseStmt test cs elsept)  = do
   let lls = concat (zipWith (\(xs,_) l -> map (\x -> (x,l)) xs) cs ls) 
   (def_lab, exit_lab) <- liftM2 (,) label label
   let caseStmt l (_,c) = do
-      code <- genStmt c
-      return $ SEQ [LABEL l,  code, JUMP exit_lab] 
+        code <- genStmt c
+        return $ SEQ [LABEL l,  code, JUMP exit_lab] 
 
   cases <- mapM (uncurry caseStmt) (zip ls cs)
   cElse <- genStmt elsept
