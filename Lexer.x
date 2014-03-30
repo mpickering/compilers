@@ -71,7 +71,6 @@ nested_comment _ _ = do
     err input = do alexSetInput input; alexError "error in nested comment"  
 
 
-
 lookup' :: M.Map Ident Token -> AlexInput -> Int -> Alex Token
 lookup' m ((AlexPn _ p _), _, _, str) len  = return $ case l of
               Just l -> l
@@ -95,6 +94,9 @@ kws = [ ("begin", BEGIN), ("do", DO), ("if", IF ), ("elsif", ELSIF), ("else", EL
 
 kwtable :: M.Map Ident Token
 kwtable = fromList kws
+
+getTokens :: Int -> String -> Either String [Token]
+getTokens n s = runAlex s (replicateM n alexMonadScan)
 
 alexEOF :: Alex (Token)
 alexEOF = return EOF  

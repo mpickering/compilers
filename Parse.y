@@ -118,7 +118,9 @@ factor :: { Expr } :
   | LPAR expr RPAR                      { $2 } 
 
 name :: { Name } :
-    IDENT                               {% do {a <- getPosn; return $ Name $1 "" (fst a)} } 
+    IDENT                               {% do 
+                                            (line, _) <- getPosn
+                                            return $ Name $1 ('_':$1) line } 
 
 
 
@@ -127,7 +129,7 @@ name :: { Name } :
 getPosn :: Alex (Int,Int)
 getPosn = do
   (AlexPn _ l c,_,_,_) <- alexGetInput
-  return (l,c)
+  return $ (l,c)
 
 happyError :: Token -> Alex a
 happyError t = do

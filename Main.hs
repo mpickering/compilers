@@ -6,6 +6,7 @@ import Keiko (Code(..))
 import Control.Applicative
 import System.Environment
 import System.Exit
+import Control.Monad
 
 main = do
   (x:xs) <- getArgs
@@ -16,16 +17,22 @@ main = do
             [] -> if dflag then die else readFile x
             [f]  -> if dflag then readFile f else die 
             _ -> die
-  let Right program = parse file
-  
+  program <- case parse file of
+                Left e -> error e
+                Right p -> return p
+  let (code, vars) = translate program 
+  when dflag (print program)
   putStrLn "MODULE Main 0 0"
   putStrLn "IMPORT Lib 0" 
   putStrLn "ENDHDR\n" 
 
-  output (lines file) (translate program)
+  putStrLn "PROC MAIN 0 0 0"
+  output (lines file) (code)
 
   putStrLn "RETURN"
   putStrLn "END\n" 
+
+  mapM (putStrLn . (\x -> "GLOVAR _" ++ x ++" 4")) vars
   
 
   exit
@@ -35,7 +42,7 @@ main = do
 output :: [String] -> Code -> IO ()
 output f (SEQ xs) = mapM_ (output f) xs
 output f (NOP)    = return () 
-output f (LINE n) = print $ "! " ++ f !! (n - 1) 
+output f (LINE n) = putStrLn $ "! " ++ f !! (n - 1) 
 output f x        = print x
  
 exit    = exitWith ExitSuccess
