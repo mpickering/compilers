@@ -90,12 +90,11 @@ instance Show Stmt where
       WhileStmt e s -> enc "WHILE" (nest [show e, show s])
       RepeatStmt s e -> enc "REPEAT" (nest [show s, show e])
       LoopStmt s -> enc "LOOP" (nest [show s])
-      Exit -> "(EXIT)\n"
-      CaseStmt e cases elsept -> "???"
-    {-    let fArm (labs, body) = 
-        fMeta "(ARM $ $)" [fList(fNum) labs; fStmt body] in
-        fMeta "(CASE $ $ $)" [fExpr e; fList(fArm) cases; fStmt elsept]
--}
+      Exit -> "(EXIT)"
+      CaseStmt e cases elsept -> 
+        let fArm (labs, body) = enc ("ARM " ++ show labs)  (nest [show body]) in
+          enc "CASE" (nest [show e, (intercalate "\n" $ map fArm cases), show elsept])
+
 
 enc s x = "("++ s ++ " " ++  x ++ ")"
 
@@ -108,5 +107,5 @@ instance Show Expr where
       Number n -> enc "NUMBER" (show n)
       Variable x -> enc "VARIABLE" (name x)
       Monop w e -> enc (opName w) (show e)
-      Binop w e1 e2 ->  "(" ++ opName w ++ " " ++ show e1 ++ " " ++ show e2 ++ ")"
+      Binop w e1 e2 ->  enc (opName w) (show e1 ++ " " ++ show e2)
   
