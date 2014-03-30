@@ -27,9 +27,9 @@ label = do
 
 showLine :: Int -> Gen [Code]
 showLine l = do
-  unseen <- (S.notMember l) <$> use lines
-  lines %= (S.insert l)
-  return $ if unseen then [LINE l] else [] 
+  unseen <- S.notMember l <$> use lines
+  lines %= S.insert l
+  return [LINE l | unseen]
 
 getScope :: Gen Label
 getScope = use scope
@@ -37,7 +37,7 @@ getScope = use scope
 genExpr :: Expr -> Gen Code 
 genExpr (Variable x) = do
   let l = line x
-  vars %= (S.insert $ name x)
+  vars %= S.insert (name x)
   cLine <- showLine l
   return $ SEQ $ cLine ++ [LDGW $ lab x] 
 genExpr (Number x)       = return $ CONST x
@@ -106,7 +106,7 @@ genStmt (Seq stmts) = SEQ <$> mapM genStmt stmts
 genStmt (Assign v e) = do
   let l = line v
   e' <- genExpr e
-  vars %= (S.insert $ name v)
+  vars %= S.insert (name v)
   cLine <- showLine l
   return $ SEQ $ cLine ++ [e', STGW $ lab v] 
 genStmt (Print e) = do
@@ -150,7 +150,7 @@ genStmt (CaseStmt test cs elsept)  = do
         code <- genStmt c
         return $ SEQ [LABEL l,  code, JUMP exit_lab] 
 
-  cases <- sequence (zipWith caseStmt ls cs)
+  cases <- zipWithM caseStmt ls cs
   cElse <- genStmt elsept
   return $  SEQ [ cTest
                 , CASEJUMP (length lls)

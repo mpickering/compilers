@@ -76,7 +76,7 @@ data Token =
   | EXIT  deriving (Show, Eq, Ord)
 
 instance Show Program where
-  show (Program p) = (show p) 
+  show (Program p) = show p 
 
 instance Show Stmt where
   show s = 
@@ -108,7 +108,7 @@ instance Show Expr where
       Number n -> enc "NUMBER" (show n)
       Variable x -> enc "VARIABLE" (name x)
       Monop w e -> enc (opName w) (show e)
-      Binop w e1 e2 ->  "(" ++ (opName w) ++ " " ++ show e1 ++ " " ++ show e2 ++ ")"
+      Binop w e1 e2 ->  "(" ++ opName w ++ " " ++ show e1 ++ " " ++ show e2 ++ ")"
   
 {-
 let fList f =

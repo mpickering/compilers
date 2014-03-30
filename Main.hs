@@ -27,12 +27,12 @@ main = do
   putStrLn "ENDHDR\n" 
 
   putStrLn "PROC MAIN 0 0 0"
-  output (lines file) (code)
+  output (lines file) code
 
   putStrLn "RETURN"
   putStrLn "END\n" 
 
-  mapM (putStrLn . (\x -> "GLOVAR _" ++ x ++" 4")) vars
+  mapM_ (putStrLn . (\x -> "GLOVAR _" ++ x ++" 4")) vars
   
 
   exit
@@ -45,5 +45,5 @@ output f (NOP)    = return ()
 output f (LINE n) = putStrLn $ "! " ++ f !! (n - 1) 
 output f x        = print x
  
-exit    = exitWith ExitSuccess
+exit    = exitSuccess
 die     = exitWith (ExitFailure 1) 

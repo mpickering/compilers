@@ -39,7 +39,7 @@ data Code =
 
 
 -- opName -- map an operator to its name *)
-opName = (map toUpper) . show 
+opName = map toUpper . show 
 
 instance Show Code where
   show = fInst 
