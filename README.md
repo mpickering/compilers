@@ -6,7 +6,11 @@ Haskell implementation of the compilers practical
 #Usage
 
     make
-    runghc Main.hs <fname>
+    ./hppc [-d] <file-name>
+
+#Testing
+
+    make test
     
     
 
