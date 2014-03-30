@@ -1,5 +1,7 @@
 module Keiko where
 
+import Data.Char
+
 -- |codelab| -- type of code labels 
 type Codelab = Int
 
@@ -32,57 +34,45 @@ data Code =
   | UNPACK                      -- Unpack one value into two 
   | LINE Int
   | SEQ [Code] 
-  | NOP deriving (Show, Eq, Ord)
+  | NOP deriving (Eq, Ord)
 
 
-{-
--- op_name -- map an operator to its name *)
+
+-- opName -- map an operator to its name *)
 opName = (map toUpper) . show 
 
+instance Show Code where
+  show = fInst 
+
 -- |fInst| -- format an instruction for |printf| *)
-fInstr :: Code -> String
+fInst :: Code -> String
 fInst c = case c of
-  CONST x ->        fMeta "CONST $" [fNum x]
-  GLOBAL a ->       fMeta "GLOBAL $" [fStr a]
-  LOCAL n ->        fMeta "LOCAL $" [fNum n]
-  LOADW ->          fStr "LOADW"
-  STOREW ->         fStr "STOREW"
-  LOADC ->          fStr "LOADC"
-  STOREC ->         fStr "STOREC"
-  LDGW a ->         fMeta "LDGW $" [fStr a]
-  STGW a ->         fMeta "STGW $" [fStr a]
-  MONOP w ->        fMeta "$" [fStr (op_name w)]
-  BINOP w ->        fMeta "$" [fStr (op_name w)]
-  LABEL l ->        fMeta "LABEL $" [fLab l]
-  JUMP l ->         fMeta "JUMP $" [fLab l]
-  JUMPB (b, l) ->   fMeta "$ $" 
-                      [fStr (if b then "JUMPT" else "JUMPF"); fLab l]
-  JUMPC (w, l) ->   fMeta "J$ $" [fStr (op_name w); fLab l]
-  PCALL n ->        fMeta "PCALL $" [fNum n]
-  PCALLW n ->       fMeta "PCALLW $" [fNum n]
-  RETURNW ->        fStr "RETURNW"
-  BOUND n ->        fMeta "BOUND $" [fNum n]
-  CASEJUMP n ->     fMeta "CASEJUMP $" [fNum n]
-  CASEARM (v, l) -> fMeta "CASEARM $ $" [fNum v; fLab l]
-  PACK ->           fStr "PACK"
-  UNPACK ->         fStr "UNPACK"
+  CONST x ->        "CONST " ++ show x
+  GLOBAL a ->       "GLOBAL " ++ a
+  LOCAL n ->        "LOCAL " ++ show n
+  LOADW ->          "LOADW"
+  STOREW ->         "STOREW"
+  LOADC ->          "LOADC"
+  STOREC ->         "STOREC"
+  LDGW a ->         "LDGW " ++ a
+  STGW a ->         "STGW " ++ a
+  MONOP w ->        opName w
+  BINOP w ->        opName w
+  LABEL l ->        "LABEL " ++ show l
+  JUMP l ->         "JUMP " ++ show l 
+  JUMPB b l ->   if b then "JUMPT" else "JUMPF" ++ " " ++ show l 
+  JUMPC w l ->   "J" ++ opName w ++ " " ++ show l
+  PCALL n ->        "PCALL " ++ show n
+  PCALLW n ->       "PCALLW " ++ show n
+  RETURNW ->        "RETURNW"
+  BOUND n ->        "BOUND " ++ show n
+  CASEJUMP n ->     "CASEJUMP " ++ show n
+  CASEARM v l -> "CASEARM " ++ show v ++ " " ++ show l 
+  PACK ->           "PACK"
+  UNPACK ->         "UNPACK"
 
-  LINE n ->         fMeta "LINE $" [fNum n]
-  SEQ _ ->          fStr "SEQ ..."
-  NOP ->            fStr "NOP"
+  LINE n ->         "LINE " ++ show n 
+  SEQ _ ->          "SEQ ..."
+  NOP ->            "NOP"
 
--- |output| -- output code sequence *)
-let output code =
-  let line = ref 0 in
-  let rec out =
-    function 
-        SEQ xs -> List.iter out xs
-      | NOP -> ()
-      | LINE n -> 
-          if n <> 0 && !line <> n then begin
-            printf "! $\n" [fStr (Source.get_line n)];
-            line := n
-          end
-      | x -> printf "$\n" [fInst x] in
-  out code
--}
+
