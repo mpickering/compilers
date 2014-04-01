@@ -16,9 +16,9 @@ build-type:          Simple
 cabal-version:       >=1.18
 
 library
-  exposed-modules:     Parse, Lexer, Kgen, Keiko, Types, Main 
+  exposed-modules:     Parse, Lexer, Kgen, Keiko, Types, Main, Check, Dict
   other-modules:       
-  other-extensions:    TemplateHaskell, GeneralizedNewtypeDeriving, CPP
+  other-extensions:    TemplateHaskell, GeneralizedNewtypeDeriving, CPP, RankNTypes
   build-depends:       base >=4.5 && <4.6, containers >=0.4 && <0.5, mtl >=2.1 && <2.2, lens >=4.0 && <4.1, array >=0.4 && <0.5
   -- hs-source-dirs:      
   build-tools:         alex, happy
@@ -29,6 +29,6 @@ Executable hppc
   Main-Is: Main.hs
   Hs-Source-Dirs: src 
   build-depends:       base >=4.5 && <4.6, containers >=0.4 && <0.5, mtl >=2.1 && <2.2, lens >=4.0 && <4.1, array >=0.4 && <0.5
-  other-extensions:    TemplateHaskell, GeneralizedNewtypeDeriving, CPP
+  other-extensions:    TemplateHaskell, GeneralizedNewtypeDeriving, CPP, RankNTypes
   Buildable: True
   

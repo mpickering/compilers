@@ -4,20 +4,31 @@ module Kgen (translate) where
 
 import Prelude hiding (negate, lines)
 import Types hiding (MONOP)
+import Dict
 import Keiko 
 import Control.Monad.State
 import Control.Applicative
 import Control.Lens
 import qualified Data.Set as S
 import Debug.Trace
+import Data.Maybe
 
 type Label = Int
 
-data Compiler = Compiler {_l :: Label, _scope :: Label, _vars :: S.Set Ident, _lines :: S.Set Int} deriving (Show)
+
+data Compiler = Compiler {_l :: Label, _lines :: S.Set Int} deriving (Show)
 
 makeLenses ''Compiler
 
 newtype Gen a = Gen {codeGen :: State Compiler a} deriving (Functor, Applicative, Monad, MonadState Compiler)
+
+lineNumber :: Expr -> Int
+lineNumber e = 
+  case eguts e of
+    (Variable x) -> line x
+    (Sub a e)  -> lineNumber a
+    _ -> 999
+            
 
 label :: Gen Label 
 label = do
@@ -25,29 +36,54 @@ label = do
   l .= (a+1)
   return a
 
-showLine :: Int -> Gen [Code]
+showLine :: Int -> Gen Code
 showLine l = do
   unseen <- S.notMember l <$> use lines
   lines %= S.insert l
-  return [LINE l | unseen]
+  return $ SEQ [LINE l | unseen]
 
-getScope :: Gen Label
-getScope = use scope
+genAddr :: Expr -> Gen Code 
+genAddr v = 
+  case eguts v of 
+    Variable x -> do
+      cLine <- showLine (line x) 
+      return (SEQ $ [cLine, GLOBAL $ (lab . def) x])
+    Sub a e -> do
+        let sizeA = typeSize (baseType $ fromJust $ etype a)
+        let s = typeSize (fromJust $ etype e) 
+        baseAddr <- genAddr a 
+        ecode <- genExpr e
+        return $ SEQ [baseAddr, ecode, CONST sizeA,  BINOP Times, BINOP PlusA]
+    _ -> error $ "gen addr " ++ show v 
+
+      
+    
 
 genExpr :: Expr -> Gen Code 
-genExpr (Variable x) = do
-  let l = line x
-  vars %= S.insert (name x)
-  cLine <- showLine l
-  return $ SEQ $ cLine ++ [LDGW $ lab x] 
-genExpr (Number x)       = return $ CONST x
-genExpr (Monop w e1)     = do
-  e <- genExpr e1 
-  return $ SEQ [e, MONOP w]
-genExpr (Binop w e1 e2)  = do
-  e1' <- genExpr e1
-  e2' <- genExpr e2
-  return $ SEQ [e1', e2', BINOP w]
+genExpr e = case eguts e of
+  Variable x -> do
+    eAddr <- genAddr e
+    let t = fromJust $ etype e
+    return $ SEQ [eAddr, loadInst t]
+  Sub v s -> do
+    eAddr <- genAddr e
+    return $ SEQ ([eAddr, loadInst (fromJust $ etype e)])
+  Number x -> return $ CONST x
+  Monop w e1 -> do
+    e <- genExpr e1 
+    return $ SEQ [e, MONOP w]
+  Binop w e1 e2 -> do
+    e1' <- genExpr e1
+    e2' <- genExpr e2
+    return $ SEQ [e1', e2', BINOP w]
+
+loadInst :: Type -> Code
+loadInst t
+  | s == 1 = LOADC
+  | s == 4 = LOADW 
+  | otherwise = error "incorrect type size"
+  where
+    s = typeSize t
 
 
 negate :: Op -> Op      
@@ -59,44 +95,45 @@ negate Gt = Leq
 negate Geq = Lt
 negate _   = error "negate"
 
--- Generate code to jump to |lab| if |e| has value |sense| 
+
+
 genCond :: Expr -> Bool -> Label -> Gen Code
-genCond (Number x) sense lab 
-  | b == sense = return $ JUMP lab
-  | otherwise = return NOP
-  where b = (x /= 0) 
-genCond (Monop Not e) sense lab = 
-  genCond e (not sense) lab
-genCond (Binop And e1 e2) sense lab
-  | sense = do
+genCond e sense lab = case eguts e of 
+  Number x -> do
+    let sense' = sense == (x /= 0) in 
+      if sense' then return $ JUMP lab
+        else return NOP
+  (Monop Not e) -> 
+    genCond e (not sense) lab
+  (Binop And e1 e2) ->
+    if  sense then do
       lab1 <- label
       c1  <- genCond e1 False lab1 
       c2  <- genCond e2 True lab 
       return $ SEQ [c1, c2, LABEL lab1]
-  | otherwise = do
+    else do
       c1 <- genCond e1 False lab 
       c2 <- genCond e2 False lab 
       return $ SEQ [c1, c2]
-genCond (Binop Or e1 e2) sense lab 
-  | sense = do
+  (Binop Or e1 e2) ->
+    if sense then do 
       c1  <- genCond e1 True lab 
       c2  <- genCond e2 True lab 
       return $ SEQ [c1, c2]
-  | otherwise = do
+    else do
       lab1 <- label 
       c1 <- genCond e1 True lab1
       c2 <- genCond e2 False lab 
       return $ SEQ [c1, c2, LABEL lab1]
-genCond e@(Binop w e1 e2) sense lab
-  | w `elem` [Eq, Neq, Lt, Gt, Leq, Geq] = do
-    (e1', e2') <- liftM2 (,) (genExpr e1) (genExpr e2)
-    return $ SEQ [e1', e2', JUMPC sense' lab] 
-  | otherwise = genCond e sense lab
-  where
-    sense' = if sense then w else negate w
-genCond e sense lab = do 
-  e' <- genExpr e
-  return $ SEQ [e', JUMPB sense lab]
+  (Binop w e1 e2) ->
+    if w `elem` [Eq, Neq, Lt, Gt, Leq, Geq] then do
+      let sense' = if sense then w else negate w
+      (e1', e2') <- liftM2 (,) (genExpr e1) (genExpr e2)
+      return $ SEQ [e1', e2', JUMPC sense' lab] 
+    else genCond e sense lab
+  _ -> do 
+    e' <- genExpr e  
+    return $ SEQ [e', JUMPB sense lab]
 
 
 -- |gen_stmt| -- generate code for a statement 
@@ -104,11 +141,15 @@ genStmt :: Stmt -> Gen Code
 genStmt Skip = return NOP
 genStmt (Seq stmts) = SEQ <$> mapM genStmt stmts
 genStmt (Assign v e) = do
-  let l = line v
+  let l = lineNumber v
   e' <- genExpr e
-  vars %= S.insert (name v)
+  address <- genAddr v
   cLine <- showLine l
-  return $ SEQ $ cLine ++ [e', STGW $ lab v] 
+  let st = fromJust $ etype e
+  let storeInst = case typeSize st of 
+                      4 -> STOREW
+                      1 -> STOREC
+  return $ SEQ $ [cLine, e', address, storeInst] 
 genStmt (Print e) = do
   e' <- genExpr e
   return $ SEQ  [e', CONST 0, GLOBAL "Lib.Print", PCALL 1]
@@ -129,38 +170,6 @@ genStmt (WhileStmt test body)  = do
   (c1, c2) <- liftM2 (,) (genCond test False lab2) (genStmt body)
   return $ SEQ [ LABEL lab1, c1, c2
                , JUMP lab1, LABEL lab2]
-genStmt (RepeatStmt body test)  = do
-  lab1 <- label
-  cBody <- genStmt body
-  cTest <- genCond test False lab1
-  return $ SEQ [LABEL lab1, cBody, cTest]
-genStmt (LoopStmt body)  = do
-  lab1 <- label
-  lab2 <- label
-  withContext scope lab2 (do 
-    c <- genStmt body
-    return $ SEQ [LABEL lab1, c, JUMP lab1, LABEL lab2])
-genStmt (Exit)  = JUMP <$> getScope
-genStmt (CaseStmt test cs elsept)  = do
-  cTest <- genExpr test
-  ls <- mapM (const label) cs 
-  let lls = concat (zipWith (\(xs,_) l -> map (\x -> (x,l)) xs) cs ls) 
-  (def_lab, exit_lab) <- liftM2 (,) label label
-  let caseStmt l (_,c) = do
-        code <- genStmt c
-        return $ SEQ [LABEL l,  code, JUMP exit_lab] 
-
-  cases <- zipWithM caseStmt ls cs
-  cElse <- genStmt elsept
-  return $  SEQ [ cTest
-                , CASEJUMP (length lls)
-                , SEQ (map (uncurry CASEARM) lls)
-                , JUMP def_lab
-                , SEQ cases
-                , LABEL def_lab
-                , cElse
-                , LABEL exit_lab
-                ]
 
 
 withContext :: Lens' Compiler a -> a  -> Gen Code -> Gen Code 
@@ -171,7 +180,6 @@ withContext l v m = do
   l .= old
   return c 
             
-translate :: Program -> (Code, [Ident])
-translate (Program p)  = 
-  let (c, r) = runState (codeGen $ genStmt p)  (Compiler 2 1 S.empty S.empty) in
-  (SEQ [c, LABEL 1], views vars S.toList r)
+translate :: Program -> Code
+translate (Program ds p)  = 
+  let (c, r) = runState (codeGen $ genStmt p)  (Compiler 2 S.empty) in c

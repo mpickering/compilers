@@ -2,11 +2,15 @@ module Main where
 
 import Parse
 import Kgen
+import Types
+import Dict(typeSize)
 import Keiko (Code(..))
+import Check
 import Control.Applicative
 import System.Environment
 import System.Exit
 import Control.Monad
+import Data.List (intercalate)
 
 main = do
   (x:xs) <- getArgs
@@ -17,10 +21,12 @@ main = do
             [] -> if dflag then die else readFile x
             [f]  -> if dflag then readFile f else die 
             _ -> die
-  program <- case parse file of
+  program@(Program ds _) <- case parse file of
                 Left e -> error e
-                Right p -> return p
-  let (code, vars) = translate program 
+                Right p -> return p 
+  let checked = typeCheck program 
+  let Right c = checked
+  let code = translate c
   when dflag (print program)
   putStrLn "MODULE Main 0 0"
   putStrLn "IMPORT Lib 0" 
@@ -31,12 +37,18 @@ main = do
 
   putStrLn "RETURN"
   putStrLn "END\n" 
-
-  mapM_ (putStrLn . (\x -> "GLOVAR _" ++ x ++" 4")) vars
+  
+  let showDecl (Decl xs t) = map (\x -> "GLOVAR _" ++ name x ++ " " ++ show s) xs
+        where
+          s = typeSize t
+      
+  
+  putStrLn (intercalate "\n" (concatMap showDecl ds))
   
 
   exit
   
+
 
 -- |output| -- output code sequence 
 output :: [String] -> Code -> IO ()

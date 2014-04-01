@@ -9,7 +9,10 @@ data Def = Def
     { tag   :: Ident
     , ptype :: Maybe Type   
     , lab   :: String
-    } deriving (Ord, Show, Eq)  
+    } deriving (Ord, Eq)  
+
+instance Show Def where
+  show = tag
 
 data Type = Integer | Boolean | Array Int Type  deriving (Eq, Show, Ord)
 

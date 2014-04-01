@@ -80,7 +80,7 @@ stmt_list ::{ [Stmt] }:
 
 stmt :: {Stmt} :  
                                         { Skip }
-  | name ASSIGN expr                    { Assign $1 $3 }
+  | expr ASSIGN expr                    { Assign $1 $3 }
   | PRINT expr                          { Print $2 }
   | NEWLINE                             { Newline }
   | IF expr THEN stmts END              { IfStmt $2 $4 Skip }

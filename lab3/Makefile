@@ -1,7 +1,7 @@
 # lab2/Makefile
 
 ## Add your own test cases to this list
-TEST = gcd ifTest repeat repeatEmpty semicolonRepeat loop externalexit nestedloop case
+TEST = gcd pascal binary array
 
 KEIKO = ../keiko
 

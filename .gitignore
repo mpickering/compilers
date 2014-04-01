@@ -1,6 +1,10 @@
-cabal.sandbox.config
-.cabal-sandbox/*
-dist/*
-Parse.hs
-Lexer.hs
-hppc
+*/cabal.sandbox.config
+*/.cabal-sandbox/*
+*/dist/*
+*/src/Parse.hs
+*/src/Lexer.hs
+*/hppc
+keiko/ppx
+keiko/ppclink
+keiko/pplink
+keiko/*.[ao]

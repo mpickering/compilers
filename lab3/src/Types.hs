@@ -13,7 +13,7 @@ data Name = Name
 
 
 instance Show Name where
-  show = name
+  show = show . def
 
 mkSeq :: [Stmt] -> Stmt
 mkSeq []  = Skip
@@ -33,7 +33,7 @@ instance Show Decl where
 data Stmt =
     Skip
   | Seq [Stmt]
-  | Assign Name Expr
+  | Assign Expr Expr
   | Print Expr
   | Newline
   | IfStmt Expr Stmt Stmt
@@ -45,7 +45,7 @@ instance Show Stmt where
     case s of
       Skip -> "(SKIP)"
       Seq ss -> enc "SEQ" (nest (map show ss))
-      Assign x e -> enc "ASSIGN" (name x ++ " " ++ show e)
+      Assign x e -> enc "ASSIGN" (show x ++ " " ++ show e)
       Print e -> enc "PRINT" (show e)
       Newline -> "(NEWLINE)"
       IfStmt e s1 s2 -> enc "IF" (nest  [show e, show s1, show s2])
@@ -54,10 +54,11 @@ instance Show Stmt where
 data Expr = Expr 
     { eguts :: ExprGuts 
     , etype :: Maybe Type
-    }  deriving (Eq, Ord)
+    }  deriving (Eq,  Ord)
 
 instance Show Expr where
   show = show . eguts
+
 
 makeExpr :: ExprGuts -> Expr
 makeExpr = flip Expr Nothing
@@ -73,9 +74,10 @@ instance Show ExprGuts where
   show e = 
     case e of
       Number n -> enc "NUMBER" (show n)
-      Variable x -> enc "VARIABLE" (name x)
+      Variable x -> enc "VARIABLE" (show $ def x)
       Monop w e -> enc (opName w) (show e)
       Binop w e1 e2 ->  enc (opName w) (show e1 ++ " " ++ show e2)
+      Sub a e -> enc "SUB" (show a ++ " " ++ show e)
       _ -> "???"
 
 data Token =
