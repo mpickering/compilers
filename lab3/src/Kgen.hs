@@ -1,6 +1,6 @@
 {-# LANGUAGE TemplateHaskell, GeneralizedNewtypeDeriving, RankNTypes #-}
 
-module Kgen (translate) where
+module Kgen (output) where
 
 import Prelude hiding (negate, lines)
 import Types hiding (MONOP)
@@ -10,13 +10,13 @@ import Control.Monad.State
 import Control.Applicative
 import Control.Lens
 import qualified Data.Set as S
-import Debug.Trace
 import Data.Maybe
+import Data.List (intercalate)
 
 type Label = Int
 
 
-data Compiler = Compiler {_l :: Label, _lines :: S.Set Int} deriving (Show)
+data Compiler = Compiler {_l :: Label} deriving (Show)
 
 makeLenses ''Compiler
 
@@ -36,18 +36,12 @@ label = do
   l .= (a+1)
   return a
 
-showLine :: Int -> Gen Code
-showLine l = do
-  unseen <- S.notMember l <$> use lines
-  lines %= S.insert l
-  return $ SEQ [LINE l | unseen]
 
 genAddr :: Expr -> Gen Code 
 genAddr v = 
   case eguts v of 
     Variable x -> do
-      cLine <- showLine (line x) 
-      return $ SEQ [cLine, GLOBAL $ (lab . def) x]
+      return $ SEQ [LINE $ line x, GLOBAL $ (lab . def) x]
     Sub a e -> do
         let sizeA = typeSize (baseType $ fromJust $ etype a)
         let s = typeSize (fromJust $ etype e) 
@@ -140,15 +134,13 @@ genStmt :: Stmt -> Gen Code
 genStmt Skip = return NOP
 genStmt (Seq stmts) = SEQ <$> mapM genStmt stmts
 genStmt (Assign v e) = do
-  let l = lineNumber v
   e' <- genExpr e
   address <- genAddr v
-  cLine <- showLine l
   let st = fromJust $ etype e
   let storeInst = case typeSize st of 
                       4 -> STOREW
                       1 -> STOREC
-  return $ SEQ [cLine, e', address, storeInst] 
+  return $ SEQ [LINE $ lineNumber v, e', address, storeInst] 
 genStmt (Print e) = do
   e' <- genExpr e
   return $ SEQ [e', CONST 0, GLOBAL "Lib.Print", PCALL 1]
@@ -180,5 +172,31 @@ withContext l v m = do
   return c 
             
 translate :: Program -> Code
-translate (Program ds p)  = 
-  let (c, r) = runState (codeGen $ genStmt p)  (Compiler 2 S.empty) in c
+translate (Program ds p)  = evalState (codeGen $ genStmt p)  (Compiler 2)
+
+output :: [String] -> Program -> IO ()
+output f p@(Program ds _) = do
+  putStrLn "MODULE Main 0 0"
+  putStrLn "IMPORT Lib 0" 
+  putStrLn "ENDHDR\n" 
+
+  putStrLn "PROC MAIN 0 0 0"
+  let code = translate p
+  runStateT (outCode code) 1
+
+  putStrLn "RETURN"
+  putStrLn "END\n" 
+  
+  let showDecl (Decl xs t) = map (\x -> "GLOVAR _" ++ name x ++ " " ++ show s) xs
+        where
+          s = typeSize t
+      
+  putStrLn (intercalate "\n" (concatMap showDecl ds))
+  where 
+    outCode :: Code -> StateT Int IO ()
+    outCode  (SEQ xs) = mapM_ outCode xs
+    outCode  (NOP)    = return () 
+    outCode  (LINE n) = do
+      curLine <- get
+      when (curLine /= n) (put n >> liftIO (putStrLn $ "! " ++ f !! (n - 1)))
+    outCode  x        = liftIO $ print x
