@@ -21,14 +21,12 @@ newtype Check a = Check {runCheck :: ReaderT Environment (ErrorT String Identity
 makeDef ident t = Def ident (Just t) ('_':ident)
 
 typeCheck :: Program -> Either String Program
-typeCheck p  = runIdentity $ runErrorT $ (runReaderT (runCheck $ checkProg p) empty)
-
-typeCheck' c  = runIdentity $ runErrorT $ (runReaderT (runCheck $ c) (define (Def "a" (Just Integer) "b") empty))
+typeCheck p  = runIdentity $ runErrorT (runReaderT (runCheck $ checkProg p) empty)
 
 checkProg :: Program -> Check Program
 checkProg (Program ds p) = do
   let env = checkDecls ds
-  s <- either (throwError) (\x -> local (const x) (checkStmt p)) env
+  s <- either throwError (\x -> local (const x) (checkStmt p)) env
   return $ Program ds s
  
 checkDecls :: [Decl] -> Either String Environment
@@ -87,9 +85,9 @@ checkExpr e =
       let v = getType e1'
       let s = getType e2'
       varType <- checkSub v s
-      return (Expr e' (Just varType))
-    Number n -> do
-      return (e{etype = Just Integer})
+      return $ Expr e' (Just varType)
+    Number n -> 
+      return e{etype = Just Integer}
     Monop w e1 -> do
       e'@(Monop _ e1') <- liftM (Monop w) (checkExpr e1) 
       let t = getType e1'

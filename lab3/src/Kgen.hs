@@ -47,7 +47,7 @@ genAddr v =
   case eguts v of 
     Variable x -> do
       cLine <- showLine (line x) 
-      return (SEQ $ [cLine, GLOBAL $ (lab . def) x])
+      return $ SEQ [cLine, GLOBAL $ (lab . def) x]
     Sub a e -> do
         let sizeA = typeSize (baseType $ fromJust $ etype a)
         let s = typeSize (fromJust $ etype e) 
@@ -67,7 +67,7 @@ genExpr e = case eguts e of
     return $ SEQ [eAddr, loadInst t]
   Sub v s -> do
     eAddr <- genAddr e
-    return $ SEQ ([eAddr, loadInst (fromJust $ etype e)])
+    return $ SEQ [eAddr, loadInst (fromJust $ etype e)]
   Number x -> return $ CONST x
   Monop w e1 -> do
     e <- genExpr e1 
@@ -99,10 +99,9 @@ negate _   = error "negate"
 
 genCond :: Expr -> Bool -> Label -> Gen Code
 genCond e sense lab = case eguts e of 
-  Number x -> do
+  Number x -> 
     let sense' = sense == (x /= 0) in 
-      if sense' then return $ JUMP lab
-        else return NOP
+      return $ if sense' then JUMP lab else NOP
   (Monop Not e) -> 
     genCond e (not sense) lab
   (Binop And e1 e2) ->
@@ -149,10 +148,10 @@ genStmt (Assign v e) = do
   let storeInst = case typeSize st of 
                       4 -> STOREW
                       1 -> STOREC
-  return $ SEQ $ [cLine, e', address, storeInst] 
+  return $ SEQ [cLine, e', address, storeInst] 
 genStmt (Print e) = do
   e' <- genExpr e
-  return $ SEQ  [e', CONST 0, GLOBAL "Lib.Print", PCALL 1]
+  return $ SEQ [e', CONST 0, GLOBAL "Lib.Print", PCALL 1]
 genStmt Newline = return $
   SEQ [CONST 0, GLOBAL "Lib.Newline", PCALL 0]
 genStmt (IfStmt test thenpt elsept)  = do
