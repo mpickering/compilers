@@ -13,7 +13,7 @@ import Debug.Trace
 
 type Label = Int
 
-data Compiler = Compiler {_l :: Label, _scope :: Label, _vars :: S.Set Ident, _lines :: S.Set Int} deriving (Show)
+data Compiler = Compiler {_l :: Label, _scope :: Label, _vars :: S.Set Ident} deriving (Show)
 
 makeLenses ''Compiler
 
@@ -25,21 +25,13 @@ label = do
   l .= (a+1)
   return a
 
-showLine :: Int -> Gen [Code]
-showLine l = do
-  unseen <- S.notMember l <$> use lines
-  lines %= S.insert l
-  return [LINE l | unseen]
-
 getScope :: Gen Label
 getScope = use scope
 
 genExpr :: Expr -> Gen Code 
 genExpr (Variable x) = do
-  let l = line x
   vars %= S.insert (name x)
-  cLine <- showLine l
-  return $ SEQ $ cLine ++ [LDGW $ lab x] 
+  return $ SEQ $ [LINE $ line x, LDGW $ lab x] 
 genExpr (Number x)       = return $ CONST x
 genExpr (Monop w e1)     = do
   e <- genExpr e1 
@@ -104,11 +96,9 @@ genStmt :: Stmt -> Gen Code
 genStmt Skip = return NOP
 genStmt (Seq stmts) = SEQ <$> mapM genStmt stmts
 genStmt (Assign v e) = do
-  let l = line v
   e' <- genExpr e
   vars %= S.insert (name v)
-  cLine <- showLine l
-  return $ SEQ $ cLine ++ [e', STGW $ lab v] 
+  return $ SEQ $ [LINE $ line v, e', STGW $ lab v] 
 genStmt (Print e) = do
   e' <- genExpr e
   return $ SEQ  [e', CONST 0, GLOBAL "Lib.Print", PCALL 1]
@@ -171,6 +161,11 @@ withContext l v m = do
   l .= old
   return c 
             
+translate :: Program -> (Code, [Ident])
+translate (Program p)  = 
+  let (c, r) = runState (codeGen $ genStmt p)  (Compiler 2 1 S.empty) in
+  (SEQ [c, LABEL 1], views vars S.toList r)
+
 output :: [String] -> Program -> IO ()
 output f p = do 
   let (code, vars) =  translate p
@@ -186,6 +181,7 @@ output f p = do
   putStrLn "END\n" 
 
   mapM_ (putStrLn . (\x -> "GLOVAR _" ++ x ++" 4")) vars
+
   where
     outCode :: Code -> StateT Int IO ()
     outCode (SEQ xs) = mapM_ outCode xs
@@ -195,7 +191,3 @@ output f p = do
       when (curLine /= n) (put n >> liftIO (putStrLn $ "! " ++ f !! (n - 1)))
     outCode x        = liftIO $ print x
 
-translate :: Program -> (Code, [Ident])
-translate (Program p)  = 
-  let (c, r) = runState (codeGen $ genStmt p)  (Compiler 2 1 S.empty S.empty) in
-  (SEQ [c, LABEL 1], views vars S.toList r)
