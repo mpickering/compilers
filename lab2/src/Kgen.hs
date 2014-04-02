@@ -1,6 +1,6 @@
 {-# LANGUAGE TemplateHaskell, GeneralizedNewtypeDeriving, RankNTypes #-}
 
-module Kgen (translate) where
+module Kgen (output) where
 
 import Prelude hiding (negate, lines)
 import Types hiding (MONOP)
@@ -171,6 +171,30 @@ withContext l v m = do
   l .= old
   return c 
             
+output :: [String] -> Program -> IO ()
+output f p = do 
+  let (code, vars) =  translate p
+  putStrLn "MODULE Main 0 0"
+  putStrLn "IMPORT Lib 0" 
+  putStrLn "ENDHDR\n" 
+
+  putStrLn "PROC MAIN 0 0 0"
+  
+  runStateT (outCode code) 1 
+
+  putStrLn "RETURN"
+  putStrLn "END\n" 
+
+  mapM_ (putStrLn . (\x -> "GLOVAR _" ++ x ++" 4")) vars
+  where
+    outCode :: Code -> StateT Int IO ()
+    outCode (SEQ xs) = mapM_ outCode xs
+    outCode (NOP)    = return () 
+    outCode (LINE n) = do
+      curLine <- get
+      when (curLine /= n) (put n >> liftIO (putStrLn $ "! " ++ f !! (n - 1)))
+    outCode x        = liftIO $ print x
+
 translate :: Program -> (Code, [Ident])
 translate (Program p)  = 
   let (c, r) = runState (codeGen $ genStmt p)  (Compiler 2 1 S.empty S.empty) in
