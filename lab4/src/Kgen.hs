@@ -1,6 +1,7 @@
 {-# LANGUAGE TemplateHaskell, GeneralizedNewtypeDeriving, RankNTypes #-}
 
-module Kgen (translate) where
+module Kgen (output) where
+
 
 import Prelude hiding (negate, lines)
 import Types hiding (MONOP)
@@ -10,7 +11,6 @@ import Control.Monad.State
 import Control.Applicative 
 import Control.Lens
 import qualified Data.Set as S
-import Debug.Trace
 import Data.Maybe
 import Data.List(intercalate)
 
@@ -19,25 +19,70 @@ type Label = Int
 slink = 12
 
 
-data Compiler = Compiler {_l :: Label, _lines :: S.Set Int, _scopeLevel :: Int} deriving (Show)
+data Compiler = Compiler {_l :: Label,  _scopeLevel :: Int} deriving (Show)
 
 makeLenses ''Compiler
 
 newtype Gen a = Gen {codeGen :: State Compiler a} deriving (Functor, Applicative, Monad, MonadState Compiler)
 
-            
-translate :: [String] -> Program -> String
-translate f p = evalState (codeGen $ checkProg f p) (Compiler 0 S.empty 0)
+withContext :: Lens' Compiler a -> a  -> Gen b -> Gen b 
+withContext l v m = do
+  old <- use l
+  l .= v
+  c <- m
+  l .= old
+  return c 
 
-checkProg :: [String] -> Program -> Gen String
-checkProg f (Program (Block vars procs body)) = do
-  a <- output f <$> genStmt body
-  b <- mapM (genProc f) procs
-  return $ intercalate "\n" ["PROC MAIN 0 0 0", a, "RETURN", "END\n", concat b]
-
-lineNumber :: Expr -> Int
-lineNumber (Variable x) = line x
             
+--output :: [String] -> Program -> String
+--output f p = evalState (codeGen $ checkProg f p) (Compiler 0 S.empty 0)
+
+output :: [String] -> Program -> IO ()
+output f (Program (Block is ps s)) = do
+  putStrLn  "MODULE Main 0 0\nIMPORT Lib 0\nENDHDR\n"
+
+
+  putStrLn "PROC MAIN 0 0 0"
+  let (body, procs) = unravel $ liftM2 (,) (outMain f s) (mapM (outProc f) ps)
+  evalStateT (do
+    body
+    liftIO $ putStrLn "RETURN"
+    liftIO $ putStrLn "END\n"     
+    unless (null ps) (foldl1 (>>) procs)) 1
+  mapM_ (putStrLn . (\x -> "GLOVAR _" ++ x ++" 4")) (is)
+  
+unravel :: Gen a -> a
+unravel ms = (evalState (codeGen ms) (Compiler 1 0)) 
+
+outProc :: [String] -> Proc -> Gen (StateT Int IO ())
+outProc f (Proc n formals (Block vars procs body)) = do
+  let d = getDef n
+  let clevel = level d
+  stmt <- withContext scopeLevel clevel (genStmt body)
+  procs <- withContext scopeLevel clevel $ mapM (outProc f) procs
+  let memAloc = show $ 4 * length vars
+  return (do
+    liftIO $ putStrLn ("PROC " ++ lab d ++ " " ++ memAloc ++ " 0 0")
+    outCode f stmt
+    liftIO $ putStrLn "ERROR E_RETURN 0"
+    liftIO $ putStrLn "END"
+    unless (null procs) (foldl1 (>>) procs)
+    )
+    
+
+outMain :: [String] -> Stmt -> Gen (StateT Int IO ())
+outMain f b = outCode f <$> genStmt b
+
+
+-- |output| -- output code sequence 
+outCode :: [String] -> Code -> StateT Int IO ()
+outCode f (SEQ xs) = mapM_ (outCode f) xs
+outCode f (NOP)    = return ()
+outCode f (LINE n) = do
+  curLine <- get
+  when (curLine /= n) (put n >> liftIO (putStrLn $ "! " ++ f !! (n - 1)))
+outCode f x        = liftIO $ print x
+
 
 label :: Gen Label 
 label = do
@@ -45,11 +90,6 @@ label = do
   l .= (a+1)
   return a
 
-showLine :: Int -> Gen Code
-showLine l = do
-  unseen <- S.notMember l <$> use lines
-  lines %= S.insert l
-  return $ SEQ [LINE l | unseen]
 
 genAddr :: Def -> Gen Code 
 genAddr d = 
@@ -66,7 +106,6 @@ genAddr d =
             let offset = off d in return $ LOCAL offset
     ProcDef _ -> return $ GLOBAL $ lab d
 
-    _ -> error $ "gen addr " ++ show d
 
       
     
@@ -75,10 +114,9 @@ genExpr :: Expr -> Gen Code
 genExpr e = case e of
   Variable x -> do
     let d = getDef x
-    l <- showLine (lineNumber e)  
     dAddr <- genAddr d
     case kind d of 
-      VarDef -> return $ SEQ [l, dAddr, LOADW]
+      VarDef -> return $ SEQ [LINE $ line x, dAddr, LOADW]
       ProcDef _ -> error "no procedure values"
   Number x -> return $ CONST x
   Monop w e1 -> do
@@ -94,9 +132,8 @@ genExpr e = case e of
     clevel <- use scopeLevel
     let findSlink = SEQ [CONST slink, BINOP PlusA, LOADW]
     let (m, n) = (level d + 1 , clevel)
-    li <- showLine (line p)
     dAddr <- genAddr d
-    return $ SEQ [li, SEQ compArgs,  LOCAL 0, SEQ (replicate (n-m) findSlink), dAddr, PCALLW $ length args]
+    return $ SEQ [LINE $ line p, SEQ compArgs,  LOCAL 0, SEQ (replicate (n-m) findSlink), dAddr, PCALLW $ length args]
     
 
 
@@ -186,29 +223,3 @@ genStmt (WhileStmt test body)  = do
 genStmt (Return e) = do 
   e' <- genExpr e
   return $ SEQ [e', RETURNW]
-
-genProc :: [String] -> Proc -> Gen String  
-genProc f (Proc p formals (Block vars procs body)) = do
-  let d = getDef p
-  body' <-  withContext scopeLevel (level d) (genStmt body)
-  procs' <- mapM (\x -> withContext scopeLevel (level d) (genProc f x)) procs
-  let sBody = output f body' 
-  let header = "PROC " ++ lab d ++ " " ++ show (4 * length vars) ++ " 0 0"
-  return $ intercalate "\n" [header , sBody, "ERROR E_RETURN 0", "END\n",  concat procs']
-  
-
--- |output| -- output code sequence 
-output :: [String] -> Code -> String
-output f (SEQ xs) = intercalate "\n" (map (output f) xs)
-output f (NOP)    = ""
-output f (LINE n) = "! " ++ f !! (n - 1) 
-output f x        = show x
-
-withContext :: Lens' Compiler a -> a  -> Gen b -> Gen b 
-withContext l v m = do
-  old <- use l
-  l .= v
-  c <- m
-  l .= old
-  return c 
-

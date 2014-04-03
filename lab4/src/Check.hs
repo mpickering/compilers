@@ -26,7 +26,7 @@ newtype Check a = Check {runCheck :: StateT CheckState (ErrorT String Identity) 
 
 
 typeCheck :: Program -> Either String Program
-typeCheck p  = runIdentity $ runErrorT (evalStateT (runCheck $ checkProg p) (CheckState empty False 0))
+typeCheck p  = runIdentity $ runErrorT (evalStateT (runCheck $ checkProg p) (CheckState empty False 1))
 
 label :: Check Int
 label = do

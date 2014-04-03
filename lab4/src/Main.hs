@@ -23,17 +23,9 @@ main = do
                 Left e -> error e
                 Right p -> return p
   let Right checked = typeCheck program
-  let (code) = translate (lines file) checked
   when dflag (print program)
-  putStrLn "MODULE Main 0 0"
-  putStrLn "IMPORT Lib 0" 
-  putStrLn "ENDHDR\n" 
   
-  putStrLn code
-  
-  let vars (Program (Block v _ _)) = v
-
-  mapM_ (putStrLn . (\x -> "GLOVAR _" ++ x ++" 4")) (vars program)
+  output (lines file) checked
   
 
   exit

@@ -16,7 +16,7 @@ build-type:          Simple
 cabal-version:       >=1.18
 
 library
-  exposed-modules:     Parse, Lexer, Types, Dict,  Check, Kgen, Keiko,  Main
+  exposed-modules:     Main, Parse, Lexer, Types, Dict,  Check, Kgen, Keiko
   other-modules:       
   other-extensions:    TemplateHaskell, GeneralizedNewtypeDeriving, CPP
   build-depends:       base >=4.5 && <4.6, containers >=0.4 && <0.5, mtl >=2.1 && <2.2, lens >=4.0 && <4.1, array >=0.4 && <0.5
