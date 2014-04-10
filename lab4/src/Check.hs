@@ -151,10 +151,10 @@ checkExpr e =
     Call p args -> do
       d <- lookupDef (name p)
       case kind d of
-        VarDef -> throwError ((show $ name p) ++ "is not a procedure")
-        ProcDef nargs -> do
+        VarDef -> return ()
+        ProcDef nargs -> 
           when (length args /= nargs) (throwError "Procedure has incorrect number of arguments")
-          liftM2 Call (checkName p) (mapM checkExpr args)  
+      liftM2 Call (checkName p) (mapM checkExpr args)  
 
 
 

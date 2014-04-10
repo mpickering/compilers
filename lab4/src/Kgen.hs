@@ -117,7 +117,12 @@ genExpr e = case e of
     dAddr <- genAddr d
     case kind d of 
       VarDef -> return $ SEQ [LINE $ line x, dAddr, LOADW]
-      ProcDef _ -> error "no procedure values"
+      ProcDef _ -> do 
+        clevel <- use scopeLevel
+        let findSlink = SEQ [CONST slink, BINOP PlusA, LOADW]
+        let (m, n) = (level d + 1, clevel)
+        return $ SEQ [LINE $ line x, LOCAL 0, SEQ $ replicate (n-m) findSlink, dAddr, PACK]
+ 
   Number x -> return $ CONST x
   Monop w e1 -> do
     e <- genExpr e1 
@@ -129,11 +134,16 @@ genExpr e = case e of
   Call p args -> do
     compArgs <- mapM genExpr (reverse args)
     let d = getDef p
-    clevel <- use scopeLevel
-    let findSlink = SEQ [CONST slink, BINOP PlusA, LOADW]
-    let (m, n) = (level d + 1 , clevel)
-    dAddr <- genAddr d
-    return $ SEQ [LINE $ line p, SEQ compArgs,  LOCAL 0, SEQ (replicate (n-m) findSlink), dAddr, PCALLW $ length args]
+    case kind d of 
+      ProcDef _ -> do
+        clevel <- use scopeLevel
+        let findSlink = SEQ [CONST slink, BINOP PlusA, LOADW]
+        let (m, n) = (level d + 1 , clevel)
+        dAddr <- genAddr d
+        return $ SEQ [LINE $ line p, SEQ compArgs,  LOCAL 0, SEQ (replicate (n-m) findSlink), dAddr, PCALLW $ length args]
+      VarDef -> do
+        vAddr <- genAddr d
+        return $ SEQ [LINE $ line p, SEQ compArgs, vAddr, LOADW, UNPACK, PCALLW $ length args]
     
 
 

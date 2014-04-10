@@ -1,7 +1,7 @@
 # lab2/Makefile
 
 ## Add your own test cases to this list
-TEST = gcd simple fac0 fac sumpow sumpow2 bug digits cpsfib
+TEST = gcd simple fac0 fac sumpow sumpow2 digits cpsfib
  
  
 
