@@ -94,7 +94,7 @@ kws = [ ("begin", BEGIN), ("end", END), ("var", VAR), ("print", PRINT),
 
 
 kwtable :: M.Map Ident Token
-kwtable = fromList kws
+kwtable = M.fromList kws
 
 getTokens :: Int -> String -> Either String [Token]
 getTokens n s = runAlex s (replicateM n alexMonadScan)
